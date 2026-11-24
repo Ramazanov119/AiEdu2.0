@@ -1,0 +1,20 @@
+<testsuites id="" name="" tests="7" failures="0" skipped="0" errors="0" time="10.515667">
+<testsuite name="admin.spec.ts" timestamp="2026-11-23T06:24:22.507Z" hostname="" tests="6" failures="0" skipped="0" time="5.93" errors="0">
+<testcase name="teacher denied; invalid password and logout work" classname="admin.spec.ts" time="1.129">
+</testcase>
+<testcase name="analytics, filters, access changes, organizations and actual audit shape" classname="admin.spec.ts" time="1.38">
+</testcase>
+<testcase name="API failure retries and revoked permissions remove data" classname="admin.spec.ts" time="0.63">
+</testcase>
+<testcase name="mobile layout, keyboard dialog dismissal, workspace admin link" classname="admin.spec.ts" time="0.93">
+</testcase>
+<testcase name="subscription date, roles, college detach and reset serialize correctly" classname="admin.spec.ts" time="1.17">
+</testcase>
+<testcase name="teacher workspace has no admin link" classname="admin.spec.ts" time="0.691">
+</testcase>
+</testsuite>
+<testsuite name="home-navigation.spec.ts" timestamp="2026-11-23T06:24:22.507Z" hostname="" tests="1" failures="0" skipped="0" time="0.443" errors="0">
+<testcase name="home navigation reaches RUP, materials and history" classname="home-navigation.spec.ts" time="0.443">
+</testcase>
+</testsuite>
+</testsuites>

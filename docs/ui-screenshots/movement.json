@@ -1,0 +1,41 @@
+{
+  "movementConfirmed": true,
+  "coordinator": [
+    {
+      "role": "coordinator",
+      "phase": "seated",
+      "x": 326,
+      "y": 350,
+      "status": "idle"
+    },
+    {
+      "role": "coordinator",
+      "phase": "walking",
+      "x": 407,
+      "y": 359,
+      "status": "running"
+    },
+    {
+      "role": "coordinator",
+      "phase": "walking",
+      "x": 551,
+      "y": 376,
+      "status": "running"
+    },
+    {
+      "role": "coordinator",
+      "phase": "walking",
+      "x": 551,
+      "y": 376,
+      "status": "running"
+    },
+    {
+      "role": "coordinator",
+      "phase": "interaction",
+      "x": 608,
+      "y": 408,
+      "status": "running"
+    }
+  ],
+  "errors": []
+}
