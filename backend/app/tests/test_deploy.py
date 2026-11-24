@@ -99,6 +99,49 @@ async def test_production_requires_persistent_storage(monkeypatch, tmp_path):
     assert await download_private(str(path), tmp_path / "copy.txt") is None
 
 
+@pytest.mark.asyncio
+async def test_storage_upload_uses_ascii_uuid_key(monkeypatch, tmp_path):
+    from app.services.storage import upload_private
+
+    settings = SimpleNamespace(
+        environment="production",
+        supabase_url="https://storage.example",
+        supabase_service_role_key="test-key",
+    )
+    monkeypatch.setattr("app.services.storage.get_settings", lambda: settings)
+    requested_urls = []
+
+    class StorageClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, **kwargs):
+            requested_urls.append(url)
+            return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr("app.services.storage.httpx.AsyncClient", StorageClient)
+    path = tmp_path / "original-name.pdf"
+    path.write_bytes(b"document")
+
+    storage_path = await upload_private(
+        "teacher-id", path, "13.РУП.36.Основы экономики...DOCX"
+    )
+
+    key = requested_urls[0].split("/portfolio-private/", 1)[1]
+    assert key.isascii()
+    assert key.startswith("teacher-id/")
+    assert len(key.rsplit("/", 1)[1].removesuffix(".docx")) == 32
+    assert all(char in "0123456789abcdef" for char in key.rsplit("/", 1)[1].removesuffix(".docx"))
+    assert key.endswith(".docx")
+    assert storage_path == f"supabase://portfolio-private/{key}"
+
+
 def test_production_cors_custom_frontend():
     settings = Settings(_env_file=None, environment="production", frontend_url="https://edu.example.com/", cors_origins="http://localhost:3000,http://127.0.0.1:3000,https://another.example.com,*")
     assert settings.allowed_cors_origins == ["https://another.example.com", "https://edu.example.com"]

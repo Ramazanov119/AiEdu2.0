@@ -26,13 +26,13 @@ def client(tmp_path, monkeypatch):
     app.dependency_overrides.clear()
     engine.dispose()
 
-def upload(client):
+def upload(client, filename='rup.docx'):
     d=Document(); d.add_paragraph('Предмет: Информатика')
     table=d.add_table(rows=2,cols=3)
     for row,values in zip(table.rows,[['Тема: 2.3 SQL','2 часа','лекция'],['Тема: Python','4 часа','практика']]):
         for cell,value in zip(row.cells,values):cell.text=value
     stream=io.BytesIO();d.save(stream)
-    r=client.post('/portfolio/upload',data={'category':'РУП'},files={'file':('rup.docx',stream.getvalue())})
+    r=client.post('/portfolio/upload',data={'category':'РУП'},files={'file':(filename,stream.getvalue())})
     assert r.status_code==200
     return r.json()
 
@@ -78,6 +78,18 @@ def test_rup_review_events_edit_download_and_owner(client):
     assert c.get('/events').json()==[]
     assert c.post(f'/lessons/{lid}/review',json={'decision':'approved'}).status_code==404
     assert c.get(f'/lessons/{lid}/materials/{mid}/download').status_code==404
+
+
+def test_portfolio_upload_preserves_original_filename(client):
+    c, session = client
+    filename = "13.РУП.36.Основы экономики...docx"
+
+    item = upload(c, filename=filename)
+
+    assert item["filename"] == filename
+    with session() as db:
+        assert db.query(PortfolioFile).filter_by(id=item["id"]).one().filename == filename
+
 
 @pytest.mark.asyncio
 async def test_cloud_status_never_generates(monkeypatch):
