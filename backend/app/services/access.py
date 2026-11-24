@@ -30,10 +30,10 @@ def day_bounds(now=None):
     )
 
 
-def ensure_profile(db: Session, user_id: str):
+def ensure_profile(db: Session, user_id: str, *, full_name: str | None = None, institution: str | None = None):
     profile = db.get(Profile, user_id)
     if profile is None:
-        profile = Profile(id=user_id)
+        profile = Profile(id=user_id, full_name=full_name, institution=institution)
         db.add(profile)
         try:
             db.commit()

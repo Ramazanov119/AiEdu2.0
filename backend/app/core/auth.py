@@ -31,7 +31,14 @@ async def get_user_id(authorization: str | None = Header(None)) -> str:
                 )
             from app.services.identities import sync_identity
 
-            sync_identity(user_id, response.json().get("email"))
+            try:
+                sync_identity(user_id, response.json().get("email"), response.json().get("user_metadata"))
+            except Exception as exc:
+                from sqlalchemy.exc import SQLAlchemyError
+                from app.services.error_details import error_reason
+
+                cause = getattr(exc, "orig", exc) if isinstance(exc, SQLAlchemyError) else exc
+                raise HTTPException(503, "Не удалось загрузить профиль пользователя: " + error_reason(cause)) from exc
             return user_id
 
         if settings.supabase_jwt_secret:

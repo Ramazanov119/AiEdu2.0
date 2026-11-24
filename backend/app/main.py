@@ -1,4 +1,5 @@
 import asyncio, shutil, uuid, json, re
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import (
@@ -41,6 +42,8 @@ from app.services.llm import generate, LLMConfigurationError
 from app.services.storage import upload_private, download_private
 from app.services.agents import analyze_request
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI EDU 2.0 API", version="0.1.0")
 _settings = get_settings()
@@ -182,21 +185,29 @@ async def upload(
         raise HTTPException(400, "Недопустимая категория портфеля")
     if not Path(file.filename or "").suffix.lower() in (".docx", ".xlsx", ".pdf"):
         raise HTTPException(400, "Разрешены DOCX, XLSX и PDF")
-    ensure_profile(db, user_id)
-    storage_dir = Path("./storage") / user_id
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    name = f'{uuid.uuid4().hex}_{Path(file.filename or "document").name}'
-    path = storage_dir / name
-    size = 0
-    with path.open("wb") as output:
-        while chunk := file.file.read(1024 * 1024):
-            size += len(chunk)
-            if size > 20 * 1024 * 1024:
-                output.close()
-                path.unlink(missing_ok=True)
-                raise HTTPException(413, "Максимальный размер файла — 20 МБ")
-            output.write(chunk)
+    path = None
+    persistent_path = None
+    file_saved = False
+    stage = "Подготовка профиля"
+    status = 500
     try:
+        ensure_profile(db, user_id)
+        stage = "Сохранение временного файла"
+        storage_dir = Path("./storage") / user_id
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        name = f'{uuid.uuid4().hex}_{Path(file.filename or "document").name}'
+        path = storage_dir / name
+        size = 0
+        with path.open("wb") as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > 20 * 1024 * 1024:
+                    raise HTTPException(413, "Максимальный размер файла — 20 МБ")
+                output.write(chunk)
+        if not size:
+            raise HTTPException(422, "Файл пуст. Выберите документ с содержимым.")
+        stage = "Чтение документа"
+        status = 422
         if path.suffix.lower() in (".docx", ".xlsx"):
             from zipfile import ZipFile
 
@@ -204,57 +215,70 @@ async def upload(
                 if sum(i.file_size for i in archive.infolist()) > 80 * 1024 * 1024:
                     raise ValueError("Слишком большой распакованный документ")
         text = extract_document(str(path), file.filename or "")
-    except Exception as exc:
-        path.unlink(missing_ok=True)
-        raise HTTPException(
-            422, "Не удалось прочитать документ. Проверьте формат и целостность файла."
-        ) from exc
-    detected = prompt_injection_detected(text)
-    if detected:
-        path.unlink(missing_ok=True)
-        raise HTTPException(
-            422,
-            "В документе обнаружены признаки prompt injection. Файл отклонён и не сохранён.",
-        )
-    structured = extract_structured_rup(text) if category == "РУП" else None
-    try:
+        if prompt_injection_detected(text):
+            raise HTTPException(
+                422,
+                "В документе обнаружены признаки prompt injection. Файл отклонён и не сохранён.",
+            )
+        stage = "Распознавание структуры РУП"
+        structured = extract_structured_rup(text) if category == "РУП" else None
+        stage = "Загрузка в хранилище"
+        status = 502
         persistent_path = await upload_private(
             user_id, path, file.filename or name, file.content_type
         )
+        stage = "Запись документа в базу данных"
+        status = 500
+        item = PortfolioFile(
+            owner_id=user_id,
+            category=category,
+            filename=file.filename or name,
+            storage_path=persistent_path,
+            mime_type=file.content_type,
+            extracted_text=text,
+            structured_data=structured,
+            confirmed=False,
+        )
+        db.add(item)
+        db.commit()
+        file_saved = True
+        db.refresh(item)
+        stage = "Документ сохранён, но запись события загрузки не выполнена"
+        record_event(
+            db, user_id, "portfolio", "upload_document",
+            filename=item.filename, category=category, file_id=item.id,
+        )
+        return {
+            "id": item.id,
+            "filename": item.filename,
+            "category": category,
+            "extracted_preview": text[:500],
+            "structured_data": structured,
+            "prompt_injection_detected": False,
+            "confirmed": False,
+        }
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as exc:
-        path.unlink(missing_ok=True)
-        raise HTTPException(502, str(exc)) from exc
-    item = PortfolioFile(
-        owner_id=user_id,
-        category=category,
-        filename=file.filename or name,
-        storage_path=persistent_path,
-        mime_type=file.content_type,
-        extracted_text=text,
-        structured_data=structured,
-        confirmed=False,
-    )
-    db.add(item)
-    db.commit()
-    db.refresh(item)
-    record_event(
-        db,
-        user_id,
-        "portfolio",
-        "upload_document",
-        filename=item.filename,
-        category=category,
-        file_id=item.id,
-    )
-    return {
-        "id": item.id,
-        "filename": item.filename,
-        "category": category,
-        "extracted_preview": text[:500],
-        "structured_data": structured,
-        "prompt_injection_detected": detected,
-        "confirmed": False,
-    }
+        db.rollback()
+        # SQLAlchemy's string includes SQL and bound document contents. Report
+        # the underlying DB reason instead; credentials never go to the client.
+        from sqlalchemy.exc import SQLAlchemyError
+        from app.services.error_details import error_reason
+
+        cause = getattr(exc, "orig", exc) if isinstance(exc, SQLAlchemyError) else exc
+        reason = error_reason(cause)
+        logger.error("Portfolio upload failed at %s: %s: %s", stage, type(exc).__name__, reason)
+        raise HTTPException(status, f"{stage}: {reason}") from exc
+    finally:
+        if path is not None:
+            # Local development keeps successfully uploaded files on disk.
+            if not file_saved or (persistent_path and persistent_path.startswith("supabase://")):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("Could not remove temporary upload file")
 
 
 @app.post("/portfolio/{file_id}/confirm")

@@ -465,7 +465,7 @@ def test_old_sqlite_profile_survives_additive_local_upgrade(tmp_path):
 def test_verified_auth_sync_ignores_metadata_roles_and_requires_cli_bootstrap(
     setup, monkeypatch
 ):
-    client, factory, _ = setup
+    client, factory, organization_id = setup
     app.dependency_overrides.pop(get_user_id)
     monkeypatch.setenv("SUPABASE_URL", "https://auth.example.invalid")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "synthetic")
@@ -480,7 +480,7 @@ def test_verified_auth_sync_ignores_metadata_roles_and_requires_cli_bootstrap(
                 "id": "teacher",
                 "email": "teacher@example.invalid",
                 "email_confirmed_at": "2026-11-01T00:00:00Z",
-                "user_metadata": {"role": "admin"},
+                "user_metadata": {"role": "admin", "full_name": "Иван Петров", "college": "ETEC"},
             }
 
     class AuthClient:
@@ -501,6 +501,9 @@ def test_verified_auth_sync_ignores_metadata_roles_and_requires_cli_bootstrap(
     assert response.status_code == 200
     with factory() as db:
         assert db.get(Profile, "teacher").role == "teacher"
+        assert db.get(Profile, "teacher").full_name == "Teacher"
+        assert db.get(Profile, "teacher").institution == "ETEC"
+        assert db.get(Profile, "teacher").organization_id == organization_id
     assert (
         client.get("/admin/users", headers={"Authorization": "Bearer test"}).status_code
         == 403

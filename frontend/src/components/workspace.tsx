@@ -40,7 +40,8 @@ import {
   CircleHelp,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { createApi } from "@/lib/api";
+import { ApiError, createApi } from "@/lib/api";
+import AccountAuth from "./account-auth";
 import { translations, Tab } from "@/lib/i18n";
 import {
   Lesson,
@@ -169,8 +170,7 @@ export default function Workspace() {
   const [loading, setLoading] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false),
     [notifications, setNotifications] = useState(false);
-  const [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [filter, setFilter] = useState("all");
   const [selectedFile, setSelectedFile] = useState<PortfolioFile | null>(null);
   const [preview, setPreview] = useState<Lesson | null>(null);
@@ -397,14 +397,29 @@ export default function Workspace() {
     });
   }
   async function upload(file: File) {
+    setUploadError("");
     await run(async () => {
-      const body = new FormData();
-      body.append("category", "РУП");
-      body.append("file", file);
-      const r = await api.upload<{ id: string }>(body);
-      await refresh();
-      setSelectedFile(await api.get("/portfolio/" + r.id));
-      setNotice("Документ распознан. Проверьте темы и подтвердите РУП.");
+      let uploaded = false;
+      try {
+        if (!/\.(docx|xlsx|pdf)$/i.test(file.name)) throw new Error("Разрешены DOCX, XLSX и PDF");
+        if (file.size > 20 * 1024 * 1024) throw new Error("Максимальный размер файла — 20 МБ");
+        if (!file.size) throw new Error("Выбран пустой файл");
+        const body = new FormData();
+        body.append("category", "РУП");
+        body.append("file", file);
+        const result = await api.upload<{ id: string }>(body);
+        uploaded = true;
+        await refresh();
+        setSelectedFile(await api.get("/portfolio/" + result.id));
+        setNotice("Документ распознан. Проверьте темы и подтвердите РУП.");
+      } catch (cause) {
+        const reason = cause instanceof Error ? cause.message : String(cause);
+        const status = cause instanceof ApiError ? ` (HTTP ${cause.status})` : "";
+        const message = `${uploaded ? "РУП загружена, но не удалось открыть её данные" : "Не удалось загрузить РУП"} «${file.name}»${status}: ${reason}`;
+        console.error("Ошибка загрузки РУП", { filename: file.name, reason, status });
+        setUploadError(message);
+        throw new Error(message);
+      }
     });
   }
   async function sendChat(e: React.FormEvent) {
@@ -1256,6 +1271,7 @@ export default function Workspace() {
                       }}
                     />
                   </label>
+                  {uploadError && <div className="upload-feedback error" role="alert">{uploadError}</div>}
                   {files
                     .filter((f) => f.category === "РУП")
                     .map((f) => (
@@ -1870,57 +1886,7 @@ export default function Workspace() {
           onClose={() => setProfileOpen(false)}
         >
           {supabase && !session ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run(async () => {
-                  const result = await supabase!.auth.signInWithPassword({
-                    email,
-                    password,
-                  });
-                  if (result.error) throw result.error;
-                  setProfileOpen(false);
-                });
-              }}
-              className="auth-form"
-            >
-              <label>
-                Email
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label>
-                Пароль
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <button className="primary" disabled={busy}>
-                Войти
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    const r = await supabase!.auth.signUp({ email, password });
-                    if (r.error) throw r.error;
-                    setNotice("Проверьте почту для подтверждения регистрации");
-                  })
-                }
-              >
-                Регистрация
-              </button>
-            </form>
+            <AccountAuth onAuthenticated={() => setProfileOpen(false)} />
           ) : (
             <div className="auth-form">
               <p>
@@ -2282,7 +2248,7 @@ function Modal({
       if (e.key === "Escape") closeRef.current();
       if (e.key === "Tab") {
         const nodes = ref.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+          'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
         );
         if (!nodes?.length) return;
         const first = nodes[0],

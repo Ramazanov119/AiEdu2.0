@@ -45,11 +45,14 @@ export function createApi(token?: string) {
     });
     if (!response.ok) {
       let detail = "";
+      const text = await response.text();
       try {
-        const d = await response.json();
-        detail =
-          typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail);
-      } catch {}
+        const data = JSON.parse(text);
+        const reason = data.detail ?? data.message;
+        detail = typeof reason === "string" ? reason : reason ? JSON.stringify(reason) : "";
+      } catch {
+        detail = text.trim().slice(0, 1000);
+      }
       throw new ApiError(detail || `API: ${response.status}`, response.status);
     }
     return response.json() as Promise<T>;
@@ -132,8 +135,15 @@ export function createApi(token?: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }),
-    upload: <T>(body: FormData) =>
-      request<T>("/portfolio/upload", { method: "POST", body }),
+    async upload<T>(body: FormData): Promise<T> {
+      try {
+        return await request<T>("/portfolio/upload", { method: "POST", body, signal: AbortSignal.timeout(120000) });
+      } catch (cause) {
+        if (cause instanceof ApiError) throw cause;
+        const reason = cause instanceof Error ? cause.message : String(cause);
+        throw new Error("Нет ответа от сервера загрузки. Проверьте соединение; сервер может запускаться. Причина: " + reason);
+      }
+    },
     async download(path: string, filename: string) {
       const headers = new Headers();
       if (token) headers.set("Authorization", "Bearer " + token);

@@ -145,3 +145,22 @@ async def test_no_bypass_when_profile_changes_after_route_preflight(
         await generate("prompt", user_id="teacher-ollama")
     with generation_session() as db:
         assert db.query(GenerationLog).count() == 0
+
+
+def test_auth_metadata_fills_display_fields_without_changing_existing(generation_session, monkeypatch):
+    from app.services.identities import sync_identity
+    from app.models import Profile
+    monkeypatch.setattr("app.services.identities.SessionLocal", generation_session)
+    metadata = {"full_name": " Анна Иванова ", "college": "META", "role": "admin", "organization_id": "forged"}
+    sync_identity("new-teacher", "anna@example.invalid", metadata)
+    with generation_session() as db:
+        profile = db.get(Profile, "new-teacher")
+        assert profile.full_name == "Анна Иванова"
+        assert profile.institution == "META"
+        assert profile.organization_id is None
+        assert profile.role == "teacher"
+    sync_identity("new-teacher", "anna@example.invalid", {"full_name": "Другой", "college": "ALT"})
+    with generation_session() as db:
+        profile = db.get(Profile, "new-teacher")
+        assert profile.full_name == "Анна Иванова"
+        assert profile.institution == "META"

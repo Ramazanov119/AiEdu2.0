@@ -118,3 +118,52 @@ def test_cloud_material_edit_reuploads_new_document(client,monkeypatch):
     assert c.put(f'/lessons/{lid}/materials/{mid}',json={'content':'Updated SQL'}).status_code==200
     assert captured[0][0:2]==('teacher-a','Updated SQL')
     assert c.get('/lessons').json()[0]['materials'][0]['file_path'].endswith('new.docx')
+
+
+def test_upload_reports_parser_reason_and_cleans_file(client, monkeypatch, tmp_path):
+    c, _ = client
+    def fail(*args):
+        raise ValueError("Невозможно прочитать таблицу тем")
+    monkeypatch.setattr("app.main.extract_structured_rup", fail)
+    # Use a synthetic extractor to reach the structure parser, no external services.
+    monkeypatch.setattr("app.main.extract_document", lambda *args: "Тема: SQL")
+    response = c.post("/portfolio/upload", data={"category": "РУП"}, files={"file": ("rup.pdf", b"fixture")})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Распознавание структуры РУП: Невозможно прочитать таблицу тем"
+    assert not list((tmp_path / "storage").rglob("*.pdf"))
+
+
+def test_upload_reports_storage_failure(client, monkeypatch):
+    c, factory = client
+    monkeypatch.setattr("app.main.extract_document", lambda *args: "Тема: SQL")
+    async def fail(*args):
+        raise RuntimeError("Storage: bucket portfolio-private не найден")
+    monkeypatch.setattr("app.main.upload_private", fail)
+    response = c.post("/portfolio/upload", data={"category": "РУП"}, files={"file": ("rup.pdf", b"fixture")})
+    assert response.status_code == 502
+    assert "bucket portfolio-private не найден" in response.json()["detail"]
+    with factory() as db:
+        assert db.query(PortfolioFile).count() == 0
+
+
+def test_upload_database_error_does_not_expose_sql_or_credentials(client, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+    c, _ = client
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-private-key")
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+    def fail(*args):
+        raise OperationalError("SELECT secret SQL", {"private": "bound-content"}, RuntimeError("database unavailable test-private-key"))
+    monkeypatch.setattr("app.main.ensure_profile", fail)
+    response = c.post("/portfolio/upload", data={"category": "РУП"}, files={"file": ("rup.pdf", b"fixture")})
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert "Подготовка профиля: database unavailable [скрыто]" == detail
+    assert "bound-content" not in detail and "SELECT" not in detail
+
+
+def test_upload_empty_file_is_rejected(client):
+    c, _ = client
+    response = c.post("/portfolio/upload", data={"category": "РУП"}, files={"file": ("empty.pdf", b"")})
+    assert response.status_code == 422
+    assert "Файл пуст" in response.json()["detail"]

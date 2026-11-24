@@ -2885,3 +2885,37 @@ textarea {
 .scene-agent-label.failed {
   border-color: #ef9eae;
 }
+
+/* Account modes and persistent operation feedback. */
+.auth-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.auth-modes button { padding: 10px 12px; }
+.auth-form select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid #e3dbee;
+  border-radius: 9px;
+  background: #fcfbfe;
+  padding: 10px;
+  font-size: 12px;
+}
+.auth-feedback, .upload-feedback {
+  border: 1px solid #d9c9ff;
+  background: #ede8ff;
+  color: #4c4770;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.auth-feedback.error, .upload-feedback.error {
+  border-color: #f7d6df;
+  color: #a43b51;
+  background: #fff0f1;
+}
+.upload-feedback { margin: 12px 0; }
