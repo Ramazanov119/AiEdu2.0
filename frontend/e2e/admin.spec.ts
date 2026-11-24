@@ -317,7 +317,7 @@ test("analytics, filters, access changes, organizations and actual audit shape",
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "+30 дней", exact: true }).click();
   await dialog.getByRole("button", { name: "Бессрочно", exact: true }).click();
-  await dialog.getByLabel("Дневной лимит генераций").fill("0");
+  await dialog.getByLabel(/Дневной лимит (генераций|AiEdu 2\.0)/).fill("0");
   await dialog.getByLabel("Доступ включён", { exact: true }).uncheck();
   await dialog.getByLabel("Причина изменения").fill("Проверка сохранения");
   await page.screenshot({

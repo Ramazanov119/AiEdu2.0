@@ -1106,8 +1106,22 @@ function Users({
                             : "Бессрочно"}
                         </td>
                         <td>
-                          <strong>{user.generations_today}</strong> /{" "}
-                          {user.daily_limit}
+                          <div>
+                            <strong>{user.generations_today}</strong> /{" "}
+                            {user.daily_limit}
+                          </div>
+                          {user.daily_limit_v1 !== undefined &&
+                            user.daily_limit_v1 !== null && (
+                              <small
+                                style={{
+                                  display: "block",
+                                  color: "#64748b",
+                                  marginTop: 2,
+                                }}
+                              >
+                                v1.0: {user.daily_limit_v1}
+                              </small>
+                            )}
                         </td>
                         <td>{user.generations_total}</td>
                         <td>
@@ -1499,6 +1513,7 @@ function AuditFeed({
     is_active: "Доступ",
     subscription_until: "Подписка",
     daily_limit: "Дневной лимит",
+    daily_limit_v1: "Дневной лимит AiEdu 1.0",
   };
   return (
     <section className={s.panel}>

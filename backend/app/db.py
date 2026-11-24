@@ -41,6 +41,7 @@ if settings.environment == "local" and settings.database_url.startswith("sqlite"
                 "is_active": "BOOLEAN NOT NULL DEFAULT 1",
                 "subscription_until": "DATETIME",
                 "daily_limit": "INTEGER NOT NULL DEFAULT 20",
+                "daily_limit_v1": "INTEGER DEFAULT 20",
                 "created_at": "DATETIME",
                 "last_active_at": "DATETIME",
             },

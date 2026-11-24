@@ -1,5 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Literal
+from typing import Literal, Optional
 from app.core.timezones import load_zone
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -189,6 +189,7 @@ def serialize_profile(p):
         "is_active": p.is_active,
         "subscription_until": p.subscription_until,
         "daily_limit": p.daily_limit,
+        "daily_limit_v1": getattr(p, "daily_limit_v1", None),
         "created_at": p.created_at,
         "last_active_at": p.last_active_at,
     }
@@ -269,6 +270,7 @@ class UserPatch(BaseModel):
     is_active: StrictBool | None = None
     subscription_until: AwareDatetime | None = None
     daily_limit: StrictInt | None = Field(default=None, ge=0, le=1000000)
+    daily_limit_v1: Optional[int] = Field(default=None, ge=0, le=1000000)
     reason: str = Field(
         default="Изменение через административный API", min_length=3, max_length=1000
     )
@@ -353,6 +355,7 @@ def update_user(
             "organization_id": "change_organization",
             "subscription_until": "change_subscription",
             "daily_limit": "change_daily_limit",
+            "daily_limit_v1": "change_daily_limit_v1",
             "is_active": "unblock" if value else "block",
         }[key]
         db.add(

@@ -32,6 +32,11 @@ export default function UserEditor({
     [active, setActive] = useState(user.is_active),
     [until, setUntil] = useState<string | null>(user.subscription_until),
     [limit, setLimit] = useState(String(user.daily_limit)),
+    [limitV1, setLimitV1] = useState(
+      user.daily_limit_v1 !== undefined && user.daily_limit_v1 !== null
+        ? String(user.daily_limit_v1)
+        : "",
+    ),
     [reason, setReason] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -48,6 +53,7 @@ export default function UserEditor({
       is_active: active,
       subscription_until: until,
       daily_limit: Number(limit),
+      daily_limit_v1: limitV1 === "" ? null : Number(limitV1),
     },
     reason,
   );
@@ -99,7 +105,16 @@ export default function UserEditor({
             Number(limit) > 1000000 ||
             !limit
           ) {
-            setError("Укажите целый дневной лимит от 0 до 1 000 000.");
+            setError("Укажите целый дневной лимит AiEdu 2.0 от 0 до 1 000 000.");
+            return;
+          }
+          if (
+            limitV1 !== "" &&
+            (!Number.isInteger(Number(limitV1)) ||
+              Number(limitV1) < 0 ||
+              Number(limitV1) > 1000000)
+          ) {
+            setError("Укажите целый дневной лимит AiEdu 1.0 от 0 до 1 000 000.");
             return;
           }
           if (reason.trim().length < 3) {
@@ -203,22 +218,39 @@ export default function UserEditor({
               конца суток Asia/Almaty.
             </p>
           </div>
-          <label>
-            Дневной лимит генераций
-            <input
-              type="number"
-              min="0"
-              max="1000000"
-              step="1"
-              required
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-            />
-            <small>
-              Сегодня использовано: {user.generations_today}. Лимит 0 запрещает
-              генерации.
-            </small>
-          </label>
+          <div className={s.formColumns}>
+            <label>
+              Дневной лимит AiEdu 2.0
+              <input
+                type="number"
+                min="0"
+                max="1000000"
+                step="1"
+                required
+                value={limit}
+                onChange={(e) => setLimit(e.target.value)}
+              />
+              <small>
+                Сегодня использовано: {user.generations_today}. Лимит 0 запрещает
+                генерации.
+              </small>
+            </label>
+            <label>
+              Дневной лимит AiEdu 1.0
+              <input
+                type="number"
+                min="0"
+                max="1000000"
+                step="1"
+                placeholder="20"
+                value={limitV1}
+                onChange={(e) => setLimitV1(e.target.value)}
+              />
+              <small>
+                Лимит для версии AiEdu 1.0. Лимит 0 запрещает генерации.
+              </small>
+            </label>
+          </div>
           <label>
             Причина изменения
             <textarea
@@ -234,7 +266,7 @@ export default function UserEditor({
           <div className={s.auditNote}>
             <ShieldCheck size={16} />
             <span>
-              Роль, доступ, колледж и лимит изменятся только после сохранения.
+              Роль, доступ, колледж и лимиты изменятся только после сохранения.
               Операция попадёт в журнал аудита.
             </span>
           </div>

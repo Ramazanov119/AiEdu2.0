@@ -190,6 +190,53 @@ def test_admin_patch_is_atomic_audited_and_does_not_touch_auth(setup):
     )
 
 
+def test_admin_patch_daily_limit_v1_and_v2_independently(setup):
+    client, factory, _ = setup
+    admin_login()
+    # Change v1 limit independently
+    res_v1 = client.patch(
+        "/admin/users/teacher",
+        json={"daily_limit_v1": 35, "reason": "AiEdu 1.0 limit update"},
+    )
+    assert res_v1.status_code == 200, res_v1.text
+    data = res_v1.json()
+    assert data["daily_limit_v1"] == 35
+    assert data["daily_limit"] == 20
+
+    with factory() as db:
+        p = db.get(Profile, "teacher")
+        assert p.daily_limit_v1 == 35
+        assert p.daily_limit == 20
+        log = (
+            db.query(AdminAuditLog)
+            .filter(
+                AdminAuditLog.target_user_id == "teacher",
+                AdminAuditLog.action == "change_daily_limit_v1",
+            )
+            .first()
+        )
+        assert log is not None
+        assert log.details["field"] == "daily_limit_v1"
+        assert log.details["after"] == 35
+
+    # Change v2 limit independently
+    res_v2 = client.patch(
+        "/admin/users/teacher",
+        json={"daily_limit": 50, "reason": "AiEdu 2.0 limit update"},
+    )
+    assert res_v2.status_code == 200, res_v2.text
+    data = res_v2.json()
+    assert data["daily_limit"] == 50
+    assert data["daily_limit_v1"] == 35
+
+    # Invalid negative v1 limit
+    res_invalid = client.patch(
+        "/admin/users/teacher",
+        json={"daily_limit_v1": -5},
+    )
+    assert res_invalid.status_code == 422
+
+
 def test_last_admin_cannot_be_demoted_or_disabled(setup):
     client, _, _ = setup
     admin_login()

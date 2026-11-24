@@ -30,6 +30,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   change_subscription: "Изменение подписки",
   change_organization: "Перевод в колледж",
   change_daily_limit: "Изменение лимита",
+  change_daily_limit_v1: "Изменение лимита AiEdu 1.0",
   create_organization: "Добавление колледжа",
   bootstrap_initial_admin: "Первый администратор",
 };
@@ -91,6 +92,7 @@ export function userPatch(
     is_active: boolean;
     subscription_until: string | null;
     daily_limit: number;
+    daily_limit_v1?: number | null;
   },
   reason: string,
 ): AdminUserPatch {
@@ -101,14 +103,17 @@ export function userPatch(
     "is_active",
     "subscription_until",
     "daily_limit",
+    "daily_limit_v1",
   ] as const) {
     const current = state[key],
       before = user[key];
     const same =
       key === "subscription_until" && current && before
         ? Date.parse(String(current)) === Date.parse(String(before))
-        : current === before;
-    if (!same) Object.assign(changes, { [key]: current });
+        : key === "daily_limit_v1"
+          ? (current ?? null) === (before ?? null)
+          : current === before;
+    if (!same && current !== undefined) Object.assign(changes, { [key]: current });
   }
   return Object.keys(changes).length
     ? { ...changes, reason: reason.trim() }

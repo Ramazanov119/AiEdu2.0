@@ -56,6 +56,9 @@ class Profile(Base):
         DateTime(timezone=True), nullable=True
     )
     daily_limit: Mapped[int] = mapped_column(Integer, default=20, server_default="20")
+    daily_limit_v1: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=20, server_default="20"
+    )
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=True
     )
@@ -67,6 +70,10 @@ class Profile(Base):
             "role IN ('teacher','methodist','admin')", name="profile_role_valid"
         ),
         CheckConstraint("daily_limit >= 0", name="profile_limit_valid"),
+        CheckConstraint(
+            "daily_limit_v1 IS NULL OR daily_limit_v1 >= 0",
+            name="profile_limit_v1_valid",
+        ),
     )
 
 

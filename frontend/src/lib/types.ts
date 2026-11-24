@@ -173,6 +173,7 @@ export interface UserProfile {
   is_active: boolean;
   subscription_until: string | null;
   daily_limit: number;
+  daily_limit_v1?: number | null;
   created_at: string | null;
   last_active_at: string | null;
 }
@@ -267,5 +268,6 @@ export interface AdminUserPatch {
   is_active?: boolean;
   subscription_until?: string | null;
   daily_limit?: number;
+  daily_limit_v1?: number | null;
   reason?: string;
 }
